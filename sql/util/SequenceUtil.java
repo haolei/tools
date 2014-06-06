@@ -173,9 +173,8 @@ public class SequenceUtil {
 		}
 
 		public long getKey() {
-			long myValue;
-			long acquired = count.incrementAndGet();
-			while (acquired > DEFAULT_CACHE_SIZE) {
+			KeyPair pair = tryGet();
+			while (pair.getIndex() > DEFAULT_CACHE_SIZE) {
 				try {
 					try {
 						updateLock.lock();
@@ -185,16 +184,26 @@ public class SequenceUtil {
 					}
 				} catch (InterruptedException e) {
 				}
-				acquired = count.incrementAndGet();
+				pair = tryGet();
 			}
 
-			myValue = currentValue.get() + acquired;
-			if (acquired == DEFAULT_CACHE_SIZE) {
+			if (pair.getIndex() == DEFAULT_CACHE_SIZE) {
 				init();
 			}
 			notifyNotEmpty();
 
-			return myValue;
+			return pair.getValue();
+		}
+
+		private KeyPair tryGet() {
+			KeyPair pair;
+			try {
+				updateLock.lock();
+				pair = new KeyPair(currentValue.get(), count.incrementAndGet());
+			} finally {
+				updateLock.unlock();
+			}
+			return pair;
 		}
 
 		private void notifyNotEmpty() {
@@ -224,6 +233,38 @@ public class SequenceUtil {
 			}
 
 		}
+
+		class KeyPair {
+			private long base;
+			private long index;
+
+			public KeyPair(long base, long index) {
+				this.base = base;
+				this.index = index;
+			}
+
+			public long getValue() {
+				return this.base + this.index;
+			}
+
+			public long getBase() {
+				return base;
+			}
+
+			public void setBase(long base) {
+				this.base = base;
+			}
+
+			public long getIndex() {
+				return index;
+			}
+
+			public void setIndex(long index) {
+				this.index = index;
+			}
+
+		}
 	}
 
 }
+
